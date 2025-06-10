@@ -162,6 +162,7 @@ $yearsToLoad = $calendarYear - $currentYear + 1;
     $todayDay = $today[2];
     $today = $todayYear . '-' . $todayMonth . '-' . $todayDay;
     $today = strtotime($today);
+
     ?>
 
     <div class="calendar">
@@ -232,19 +233,22 @@ $yearsToLoad = $calendarYear - $currentYear + 1;
                     }
 
                     for ($date = $startDate; $date <= $endDate; $date = strtotime($incrementString, $date)) {
-                      if (date('Y-m', $date) == $calendarYear . '-' . str_pad($calendarMonth, 2, '0', STR_PAD_LEFT)) {
-                        if (date('d', $date) == $day) {
-                          $totalCostThisMonth += getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId);
-                          $numberOfSubscriptionsToPayThisMonth++;
-                          if ($date > $today) {
-                            $amountDueThisMonth += getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId);
-                          }
-                          ?>
-                          <div class="calendar-subscription-title" onClick="openSubscriptionModal(<?= $subscription['id'] ?>)">
-                            <?= htmlspecialchars($subscription['name']) ?>
-                          </div>
-                          <?php
+                      if (
+                        date('Y-m', $date) == $calendarYear . '-' . str_pad($calendarMonth, 2, '0', STR_PAD_LEFT) &&
+                        date('d', $date) == $day &&
+                        $date >= strtotime($subscription['next_payment'])
+                      ) {
+                        $totalCostThisMonth += getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId);
+                        $numberOfSubscriptionsToPayThisMonth++;
+                        if ($date > $today) {
+                          $amountDueThisMonth += getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId);
                         }
+                        ?>
+                        <div class="calendar-subscription-title" onClick="openSubscriptionModal(<?= $subscription['id'] ?>)">
+                          <?= htmlspecialchars($subscription['name']) ?><br>
+                          (<?= CurrencyFormatter::format(getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId), $code) ?>)
+                        </div>
+                        <?php
                       }
                     }
                   }
@@ -305,19 +309,22 @@ $yearsToLoad = $calendarYear - $currentYear + 1;
                   }
 
                   for ($date = $startDate; $date <= $endDate; $date = strtotime($incrementString, $date)) {
-                    if (date('Y-m', $date) == $calendarYear . '-' . str_pad($calendarMonth, 2, '0', STR_PAD_LEFT)) {
-                      if (date('d', $date) == $day) {
-                        $totalCostThisMonth += getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId);
-                        $numberOfSubscriptionsToPayThisMonth++;
-                        if ($date > $today) {
-                          $amountDueThisMonth += getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId);
-                        }
-                        ?>
-                        <div class="calendar-subscription-title" onClick="openSubscriptionModal(<?= $subscription['id'] ?>)">
-                          <?= $subscription['name'] ?>
-                        </div>
-                        <?php
+                    if (
+                      date('Y-m', $date) == $calendarYear . '-' . str_pad($calendarMonth, 2, '0', STR_PAD_LEFT) &&
+                      date('d', $date) == $day &&
+                      $date >= strtotime($subscription['next_payment'])
+                    ) {
+                      $totalCostThisMonth += getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId);
+                      $numberOfSubscriptionsToPayThisMonth++;
+                      if ($date > $today) {
+                        $amountDueThisMonth += getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId);
                       }
+                      ?>
+                      <div class="calendar-subscription-title" onClick="openSubscriptionModal(<?= $subscription['id'] ?>)">
+                        <?= htmlspecialchars($subscription['name']) ?><br>
+                        (<?= CurrencyFormatter::format(getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId), $code) ?>)
+                      </div>
+                      <?php
                     }
                   }
                 }
