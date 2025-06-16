@@ -96,6 +96,104 @@ $row = $result->fetchArray(SQLITE3_ASSOC);
 $code = $row['code'];
 
 $yearsToLoad = $calendarYear - $currentYear + 1;
+
+$daysInMonth = cal_days_in_month(CAL_GREGORIAN, $calendarMonth, $calendarYear);
+$firstDay = mktime(0, 0, 0, $calendarMonth, 1, $calendarYear);
+$firstDayOfWeek = date('N', $firstDay) - 1; // Adjusted to make Monday (1) the first day
+$dayOfWeek = 0;
+$day = 1;
+$days = 1;
+$week = 1;
+$today = date('Y-m-d');
+$today = explode('-', $today);
+$todayYear = $today[0];
+$todayMonth = $today[1];
+$todayDay = $today[2];
+$today = $todayYear . '-' . $todayMonth . '-' . $todayDay;
+$today = strtotime($today);
+
+
+// Find the category_id for "Pay Day"
+$payDayCategoryId = null;
+$query = "SELECT id FROM categories WHERE name = :categoryName AND user_id = :userId";
+$stmt = $db->prepare($query);
+$stmt->bindValue(':categoryName', 'Pay Day', SQLITE3_TEXT);
+$stmt->bindValue(':userId', $userId, SQLITE3_INTEGER);
+$result = $stmt->execute();
+$row = $result->fetchArray(SQLITE3_ASSOC);
+if ($row) {
+    $payDayCategoryId = $row['id'];
+}
+
+// Debug: List all subscriptions with the "Pay Day" category
+// if ($payDayCategoryId !== null) {
+//     echo "<pre style='color:yellow;background:#222;padding:10px;'>Pay Day Subscriptions:\n";
+//     foreach ($subscriptions as $subscription) {
+//         if (isset($subscription['category_id']) && $subscription['category_id'] == $payDayCategoryId) {
+//             echo "ID: {$subscription['id']}, Name: {$subscription['name']}, Next Payment: {$subscription['next_payment']}\n";
+//         }
+//     }
+//     echo "</pre>";
+// }
+
+// Find the next pay day date (strictly after today)
+$nextPayDayDate = null;
+if ($payDayCategoryId !== null) {
+    foreach ($subscriptions as $subscription) {
+        if (isset($subscription['category_id']) && $subscription['category_id'] == $payDayCategoryId) {
+            $payDayDate = strtotime($subscription['next_payment']);
+            $cycle = $subscription['cycle'];
+            $frequency = $subscription['frequency'];
+            $incrementString = match ($cycle) {
+                1 => "+{$frequency} days",
+                2 => "+{$frequency} weeks",
+                3 => "+{$frequency} months",
+                4 => "+{$frequency} years",
+                default => "+{$frequency} months",
+            };
+            // Advance payDayDate to the next occurrence after today
+            while ($payDayDate !== false && $payDayDate <= $today) {
+                $payDayDate = strtotime($incrementString, $payDayDate);
+            }
+            if ($payDayDate !== false && ($nextPayDayDate === null || $payDayDate < $nextPayDayDate)) {
+                $nextPayDayDate = $payDayDate;
+            }
+        }
+    }
+}
+
+$amountDueUntilNextPayDay = 0;
+if ($nextPayDayDate !== null) {
+    foreach ($subscriptions as $subscription) {
+        // Skip "Pay Day" subscriptions
+        if (isset($subscription['category_id']) && $subscription['category_id'] == $payDayCategoryId) {
+            continue;
+        }
+        $cycle = $subscription['cycle'];
+        $frequency = $subscription['frequency'];
+        $incrementString = match ($cycle) {
+            1 => "+{$frequency} days",
+            2 => "+{$frequency} weeks",
+            3 => "+{$frequency} months",
+            4 => "+{$frequency} years",
+            default => "+{$frequency} months",
+        };
+
+        $paymentDate = strtotime($subscription['next_payment']);
+        if (!$paymentDate) continue; // skip invalid dates
+
+        // Move paymentDate forward if it's in the past
+        while ($paymentDate < $today) {
+            $paymentDate = strtotime($incrementString, $paymentDate);
+        }
+
+        // Add all payments for this subscription up to and including nextPayDayDate
+        while ($paymentDate !== false && $paymentDate <= $nextPayDayDate) {
+            $amountDueUntilNextPayDay += getPriceConverted($subscription['price'], $subscription['currency_id'], $db, $userId);
+            $paymentDate = strtotime($incrementString, $paymentDate);
+        }
+    }
+}
 ?>
 
 <section class="contain">
@@ -148,20 +246,7 @@ $yearsToLoad = $calendarYear - $currentYear + 1;
   </div>
   <div>
     <?php
-    $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $calendarMonth, $calendarYear);
-    $firstDay = mktime(0, 0, 0, $calendarMonth, 1, $calendarYear);
-    $firstDayOfWeek = date('N', $firstDay) - 1; // Adjusted to make Monday (1) the first day
-    $dayOfWeek = 0;
-    $day = 1;
-    $days = 1;
-    $week = 1;
-    $today = date('Y-m-d');
-    $today = explode('-', $today);
-    $todayYear = $today[0];
-    $todayMonth = $today[1];
-    $todayDay = $today[2];
-    $today = $todayYear . '-' . $todayMonth . '-' . $todayDay;
-    $today = strtotime($today);
+
 
     ?>
 
@@ -381,6 +466,16 @@ $yearsToLoad = $calendarYear - $currentYear + 1;
         <div class="statistic">
           <span><?= CurrencyFormatter::format($amountDueThisMonth, $code) ?></span>
           <div class="title"><?= translate("amount_due", $i18n) ?></div>
+        </div>
+        <div class="statistic">
+          <span><?= CurrencyFormatter::format($amountDueUntilNextPayDay, $code) ?></span>
+          <div class="title">
+            <?= translate("due_until_next_payday", $i18n) ?>
+            <?php if ($nextPayDayDate): ?>
+              <br>           
+              <small style="color:yellow;"><?= date('m-d-Y', $nextPayDayDate) ?></small>
+            <?php endif; ?>
+          </div>
         </div>
       </div>
     </div>

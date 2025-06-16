@@ -385,6 +385,7 @@ $i18n = [
     "total_cost" => "Total Cost",
     "export_icalendar" => "Export iCalendar",
     "over_budget_warning" => "You're over budget",
+    "due_until_next_payday" => "Due until next payday",
     // TOTP Page
     "insert_totp_code" => "Insert TOTP code",
 
